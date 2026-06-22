@@ -31,9 +31,9 @@ platform_cache = {}
 # Trying the models most likely to still have real free-tier quota first.
 # gemini-1.5-pro removed permanently — it 404s regardless of quota/billing.
 MODELS = [
-    "gemini-2.0-flash-lite",      # lightest, least quota pressure
-    "gemini-2.0-flash",            # fallback
-    "gemini-1.5-pro",              # more stable than flash variants
+    "gemini-2.5-flash-lite",   # first try — proven working in your logs
+    "gemini-2.5-flash",         # second try — also proven working
+    "gemini-2.0-flash-lite",    # third try — kept as a backup, not proven but harmless
 ]
 def try_generate(prompt: str) -> str:
     last_error = None
