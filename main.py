@@ -134,6 +134,7 @@ async def fetch_github_data(username: str) -> dict:
                 headers=headers
             )
             repos = repos_resp.json() if repos_resp.status_code == 200 else []
+            repos = [r for r in repos if not r.get("fork", False)]
 
             # Count languages
             languages = {}
@@ -172,7 +173,7 @@ async def fetch_github_data(username: str) -> dict:
                 "available": True,
                 "username": username,
                 "name": user.get("name", username),
-                "public_repos": user.get("public_repos", 0),
+              "public_repos": len(repos),
                 "followers": user.get("followers", 0),
                 "following": user.get("following", 0),
                 "bio": user.get("bio", ""),
@@ -495,20 +496,15 @@ If they haven't solved Hard problems, say so. If their GitHub genuinely has
 0-2 repos, mention it — but do not describe a reasonable repo count (3+) as weak.
 """
 
-    try:
-        text = try_generate(prompt)
-
-        return {
-            "analysis": text,
-            "platform_data": {
-                "github": github,
-                "leetcode": leetcode,
-                "gfg": gfg,
-            }
-        }
     except Exception as e:
-        return {"error": str(e)}
-
+            return {
+                "error": str(e),
+                "platform_data": {
+                    "github": github,
+                    "leetcode": leetcode,
+                    "gfg": gfg,
+                }
+            }
 
 @app.post("/analyze-profile", response_model=None)
 def analyze_profile(profile: Profile):
