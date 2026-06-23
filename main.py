@@ -478,7 +478,7 @@ explicitly listed above with real data.
 
     prompt = f"""
 You are Nova, an AI career coach for STUDENTS preparing for campus placements.
-Your audience is undergraduate students, not industry professionals — judge
+Your audience is undergraduate students, not industry professionals - judge
 their numbers against realistic student benchmarks, not senior-engineer standards.
 
 Analyze this student's REAL coding profile data:
