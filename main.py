@@ -439,6 +439,7 @@ LEETCODE (Real Data):
 
     if gfg.get("available"):
         platform_context += f"""
+
 GFG (Real Data):
 - Total Problems Solved: {gfg['total_solved']}
 - Coding Score: {gfg['coding_score']}
@@ -448,10 +449,29 @@ GFG (Real Data):
 - Institute Rank: {gfg['institute_rank']}
 """
 
+    missing_platforms = []
+    if not github.get("available"):
+        missing_platforms.append("GitHub")
+    if not leetcode.get("available"):
+        missing_platforms.append("LeetCode")
+    if not gfg.get("available"):
+        missing_platforms.append("GFG")
+
+    if missing_platforms:
+        platform_context += f"""
+
+NOT LINKED / NO DATA AVAILABLE: {', '.join(missing_platforms)}
+Do NOT invent, estimate, or guess numbers for these platforms. Do NOT mention
+any problem counts, scores, or stats for {', '.join(missing_platforms)} —
+treat them as if they don't exist for this student. Only discuss platforms
+explicitly listed above with real data.
+"""
+
     if not platform_context:
         platform_context = "No platform data available - analyze based on profile only."
 
     print(f"🔍 GitHub available: {github.get('available')}")
+
     if github.get('available'):
         print(f"🔍 GitHub repos seen by AI: {github.get('public_repos')}")
     print(f"🔍 Full platform_context sent to Gemini:\n{platform_context}")
@@ -477,6 +497,12 @@ Calibration guide (for a student, NOT a working professional):
 - LeetCode: 50+ solved = engaged. 150+ = strong. 300+ = excellent for a student.
 - Always state the ACTUAL NUMBER you were given before judging it
   (e.g. "You have 8 public repositories, which is a solid foundation").
+
+CRITICAL RULE: Only reference numbers/stats that appear above under "Real Data"
+sections. If a platform is listed under "NOT LINKED", you must not mention any
+score or count for it — do not say things like "you have solved X LeetCode
+problems" if LeetCode wasn't linked. Inventing data is strictly forbidden.
+
 
 Based on this REAL data, provide:
 
