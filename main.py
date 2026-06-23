@@ -496,15 +496,27 @@ If they haven't solved Hard problems, say so. If their GitHub genuinely has
 0-2 repos, mention it — but do not describe a reasonable repo count (3+) as weak.
 """
 
-    except Exception as e:
-            return {
-                "error": str(e),
-                "platform_data": {
-                    "github": github,
-                    "leetcode": leetcode,
-                    "gfg": gfg,
-                }
+
+    try:
+        text = try_generate(prompt)
+
+        return {
+            "analysis": text,
+            "platform_data": {
+                "github": github,
+                "leetcode": leetcode,
+                "gfg": gfg,
             }
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "platform_data": {
+                "github": github,
+                "leetcode": leetcode,
+                "gfg": gfg,
+            }
+        }
 
 @app.post("/analyze-profile", response_model=None)
 def analyze_profile(profile: Profile):
