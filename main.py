@@ -54,6 +54,10 @@ def extract_username(url: str) -> str:
     """Extract username from full URL"""
     if not url:
         return ""
+    # Some rows store the literal string "EMPTY" instead of a real null/blank
+    # value when a platform link was never set — treat that exactly like "".
+    if url.strip().upper() == "EMPTY":
+        return ""
     # Remove trailing slashes
     url = url.rstrip("/")
     # Get last part of URL
