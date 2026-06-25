@@ -385,12 +385,10 @@ async def fetch_platform_data(data: PlatformRequest):
         "gfg": gfg_data,
     }
 
-
 @app.post("/smart-analyze", response_model=None)
 async def smart_analyze(data: SmartAnalysisRequest):
     """
     Fetches REAL data from platforms then uses AI to analyze.
-    This is the main powerful endpoint.
     """
 
     github_username = extract_username(data.github or "")
@@ -402,57 +400,64 @@ async def smart_analyze(data: SmartAnalysisRequest):
     leetcode = await fetch_leetcode_data(leetcode_username) if leetcode_username else {"available": False}
     gfg = await fetch_gfg_data(gfg_username) if gfg_username else {"available": False}
 
-    # Build context for AI
+    print("GitHub fetched:", github)
+    print("LeetCode fetched:", leetcode)
+    print("GFG fetched:", gfg)
+
+    # ================= BUILD CONTEXT =================
     platform_context = ""
 
     if github.get("available"):
-        # Build a per-repo breakdown that includes README content when the
-        # repo had no description set — this is what actually fixes Gemini
-        # seeing "blank" projects that in reality have real content (just in
-        # the README rather than the short description field).
         repo_lines = []
-        for r in github['recent_repos']:
-            line = f"  - {r['name']} ({r['language'] or 'unknown language'})"
-            if r.get('description'):
-                line += f": {r['description']}"
-            elif r.get('readme_snippet'):
-                line += f": [from README] {r['readme_snippet']}"
+
+        for r in github.get("recent_repos", [])[:3]:   # limit to top 3 repos (saves Gemini quota)
+            line = f"- {r.get('name', 'Unknown')} ({r.get('language') or 'unknown language'})"
+
+            if r.get("description"):
+                line += f": {r['description'][:120]}"
+            elif r.get("readme_snippet"):
+                line += f": [README] {r['readme_snippet'][:150]}"
             else:
-                line += ": (no description or README available)"
+                line += ": No description"
+
             repo_lines.append(line)
 
         platform_context += f"""
 GITHUB (Real Data):
-- Public Repos: {github['public_repos']}
-- Total Stars: {github['total_stars']}
-- Top Languages: {', '.join(github['top_languages'])}
-- Followers: {github['followers']}
-- Recent Projects (with real descriptions/README content where available):
+- Public Repos: {github.get('public_repos', 0)}
+- Total Stars: {github.get('total_stars', 0)}
+- Top Languages: {', '.join(github.get('top_languages', []))}
+- Followers: {github.get('followers', 0)}
+- Recent Projects:
 {chr(10).join(repo_lines)}
 """
 
     if leetcode.get("available"):
         platform_context += f"""
 LEETCODE (Real Data):
-- Total Solved: {leetcode['total_solved']}
-- Easy: {leetcode['easy_solved']}, Medium: {leetcode['medium_solved']}, Hard: {leetcode['hard_solved']}
-- Strong Topics: {', '.join(leetcode['strong_topics'])}
-- Weak/Unsolved Topics: {', '.join(leetcode['weak_topics'])}
-- Global Ranking: {leetcode['ranking']}
+- Total Solved: {leetcode.get('total_solved', 0)}
+- Easy: {leetcode.get('easy_solved', 0)}
+- Medium: {leetcode.get('medium_solved', 0)}
+- Hard: {leetcode.get('hard_solved', 0)}
+- Strong Topics: {', '.join(leetcode.get('strong_topics', []))}
+- Weak Topics: {', '.join(leetcode.get('weak_topics', []))}
+- Ranking: {leetcode.get('ranking', 'N/A')}
 """
 
     if gfg.get("available"):
         platform_context += f"""
-
 GFG (Real Data):
-- Total Problems Solved: {gfg['total_solved']}
-- Coding Score: {gfg['coding_score']}
-- Current Streak: {gfg['streak']} days
-- Max Streak: {gfg['max_streak']} days
-- Easy: {gfg['easy']}, Medium: {gfg['medium']}, Hard: {gfg['hard']}
-- Institute Rank: {gfg['institute_rank']}
+- Total Problems Solved: {gfg.get('total_solved', 0)}
+- Coding Score: {gfg.get('coding_score', 0)}
+- Current Streak: {gfg.get('streak', 0)} days
+- Max Streak: {gfg.get('max_streak', 0)} days
+- Easy: {gfg.get('easy', 0)}
+- Medium: {gfg.get('medium', 0)}
+- Hard: {gfg.get('hard', 0)}
+- Institute Rank: {gfg.get('institute_rank', 'N/A')}
 """
 
+    # Missing platforms
     missing_platforms = []
     if not github.get("available"):
         missing_platforms.append("GitHub")
@@ -465,27 +470,17 @@ GFG (Real Data):
         platform_context += f"""
 
 NOT LINKED / NO DATA AVAILABLE: {', '.join(missing_platforms)}
-Do NOT invent, estimate, or guess numbers for these platforms. Do NOT mention
-any problem counts, scores, or stats for {', '.join(missing_platforms)} —
-treat them as if they don't exist for this student. Only discuss platforms
-explicitly listed above with real data.
+Do NOT invent stats for these platforms.
 """
 
     if not platform_context:
-        platform_context = "No platform data available - analyze based on profile only."
+        platform_context = "No platform data available."
 
-    print(f"🔍 GitHub available: {github.get('available')}")
+    print("Context sent to Gemini:\n", platform_context)
 
-    if github.get('available'):
-        print(f"🔍 GitHub repos seen by AI: {github.get('public_repos')}")
-    print(f"🔍 Full platform_context sent to Gemini:\n{platform_context}")
-
+    # ================= PROMPT =================
     prompt = f"""
-You are Nova, an AI career coach for STUDENTS preparing for campus placements.
-Your audience is undergraduate students, not industry professionals - judge
-their numbers against realistic student benchmarks, not senior-engineer standards.
-
-Analyze this student's REAL coding profile data:
+You are Nova, an AI career coach for students preparing for placements.
 
 Student: {data.full_name}
 College: {data.college}
@@ -494,38 +489,22 @@ Dream Company: {data.dream_company}
 
 {platform_context}
 
-Calibration guide (for a student, NOT a working professional):
-- GitHub: 3-5 public repos = reasonable starting point. 6-15 repos = solid, active.
-  16+ = strong. Having 0 repos is the actual weak case — do not call a student
-  "weak" on GitHub if they have several repos with real project names.
-- LeetCode: 50+ solved = engaged. 150+ = strong. 300+ = excellent for a student.
-- Always state the ACTUAL NUMBER you were given before judging it
-  (e.g. "You have 8 public repositories, which is a solid foundation").
+Rules:
+- Judge by STUDENT standards, not senior engineers.
+- GitHub: 3-5 repos = decent, 6-15 = strong.
+- LeetCode: 50+ solved = good, 150+ = strong.
+- Use ONLY real data given above.
+- Never invent numbers.
 
-CRITICAL RULE: Only reference numbers/stats that appear above under "Real Data"
-sections. If a platform is listed under "NOT LINKED", you must not mention any
-score or count for it — do not say things like "you have solved X LeetCode
-problems" if LeetCode wasn't linked. Inventing data is strictly forbidden.
-
-
-Based on this REAL data, provide:
-
-1. CAREER SCORE (out of 100) - be realistic based on actual numbers, calibrated
-   to a student level as described above
-2. STRENGTHS (3 specific points based on real data — cite the actual numbers)
-3. WEAKNESSES (3 specific points - what topics are missing, what's low —
-   only call something "weak" if it is genuinely low for a student, e.g.
-   0-2 repos, or 0 hard problems solved, not just below an expert's level)
-4. MISSING TOPICS - specific DSA topics they haven't solved yet
-5. COMPANY-SPECIFIC QUESTIONS - top 5 questions/topics {data.dream_company} frequently asks
-6. DAILY ACTION PLAN - 3 specific things to do TODAY based on their weak areas
-7. RECOMMENDATIONS (3 actionable steps)
-
-Be specific and reference their actual numbers. Don't be generic.
-If they haven't solved Hard problems, say so. If their GitHub genuinely has
-0-2 repos, mention it — but do not describe a reasonable repo count (3+) as weak.
+Provide:
+1. Career Score /100
+2. 3 Strengths
+3. 3 Weaknesses
+4. Missing DSA Topics
+5. Company Questions for {data.dream_company}
+6. Daily Action Plan
+7. Recommendations
 """
-
 
     try:
         text = try_generate(prompt)
@@ -538,6 +517,7 @@ If they haven't solved Hard problems, say so. If their GitHub genuinely has
                 "gfg": gfg,
             }
         }
+
     except Exception as e:
         return {
             "error": str(e),
