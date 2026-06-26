@@ -189,11 +189,11 @@ async def fetch_github_data(username: str) -> dict:
         print(f"GitHub fetch error: {e}")
         return {"available": False, "error": str(e)}
 
-
 async def fetch_leetcode_data(username: str) -> dict:
     """Fetch real LeetCode data using unofficial GraphQL API"""
     if not username:
         return {"available": False}
+
     try:
         query = """
         {
@@ -208,8 +208,6 @@ async def fetch_leetcode_data(username: str) -> dict:
             }
             profile {
               ranking
-              reputation
-              starRating
             }
             tagProblemCounts {
               advanced {
@@ -251,17 +249,30 @@ async def fetch_leetcode_data(username: str) -> dict:
             stats = user.get("submitStats", {}).get("acSubmissionNum", [])
             solved_map = {s["difficulty"]: s["count"] for s in stats}
 
-            # Get topic tags
             tag_counts = user.get("tagProblemCounts", {})
             all_tags = (
                 tag_counts.get("advanced", []) +
                 tag_counts.get("intermediate", []) +
                 tag_counts.get("fundamental", [])
             )
-            # Sort by problems solved
-            sorted_tags = sorted(all_tags, key=lambda x: x.get("problemsSolved", 0), reverse=True)
-            strong_topics = [t["tagName"] for t in sorted_tags[:5] if t.get("problemsSolved", 0) > 0]
-            weak_topics = [t["tagName"] for t in sorted_tags[-5:] if t.get("problemsSolved", 0) == 0]
+
+            sorted_tags = sorted(
+                all_tags,
+                key=lambda x: x.get("problemsSolved", 0),
+                reverse=True
+            )
+
+            strong_topics = [
+                t["tagName"]
+                for t in sorted_tags[:5]
+                if t.get("problemsSolved", 0) > 0
+            ]
+
+            weak_topics = [
+                t["tagName"]
+                for t in sorted_tags[-5:]
+                if t.get("problemsSolved", 0) == 0
+            ]
 
             return {
                 "available": True,
@@ -280,45 +291,6 @@ async def fetch_leetcode_data(username: str) -> dict:
         return {"available": False, "error": str(e)}
 
 
-async def fetch_gfg_data(username: str) -> dict:
-    """Fetch real GFG data using unofficial API"""
-    if not username:
-        return {"available": False}
-    try:
-        async with httpx.AsyncClient(timeout=15) as client_http:
-            resp = await client_http.get(
-                f"https://geeks-for-geeks-stats-api.vercel.app/?userName={username}",
-                headers={"Accept": "application/json"}
-            )
-
-            if resp.status_code != 200:
-                return {"available": False, "error": f"Status {resp.status_code}"}
-
-            data = resp.json()
-
-            if data.get("status") == "error" or not data:
-                return {"available": False, "error": "User not found"}
-
-            return {
-                "available": True,
-                "username": username,
-                "total_solved": data.get("totalProblemsSolved", 0),
-                "coding_score": data.get("codingScore", 0),
-                "monthly_score": data.get("monthlyScore", 0),
-                "school": data.get("School", 0),
-                "basic": data.get("Basic", 0),
-                "easy": data.get("Easy", 0),
-                "medium": data.get("Medium", 0),
-                "hard": data.get("Hard", 0),
-                "institute_rank": data.get("instituteRank", "N/A"),
-                "streak": data.get("currentStreak", 0),
-                "max_streak": data.get("maxStreak", 0),
-            }
-
-    except Exception as e:
-        print(f"GFG fetch error: {e}")
-        return {"available": False, "error": str(e)}
-
 
 # ==================== MODELS ====================
 
@@ -328,13 +300,12 @@ class Profile(BaseModel):
     goal: Optional[str] = None
     github: Optional[str] = None
     linkedin: Optional[str] = None
-    gfg: Optional[str] = None
     leetcode: Optional[str] = None
 
 class PlatformRequest(BaseModel):
     github: Optional[str] = None
     leetcode: Optional[str] = None
-    gfg: Optional[str] = None
+
 
 class RoadmapRequest(BaseModel):
     full_name: str
@@ -355,7 +326,7 @@ class SmartAnalysisRequest(BaseModel):
     dream_company: Optional[str] = None
     github: Optional[str] = None
     leetcode: Optional[str] = None
-    gfg: Optional[str] = None
+
 
 
 # ==================== ENDPOINTS ====================
@@ -371,19 +342,17 @@ async def fetch_platform_data(data: PlatformRequest):
 
     github_username = extract_username(data.github or "")
     leetcode_username = extract_username(data.leetcode or "")
-    gfg_username = extract_username(data.gfg or "")
 
-    print(f"Fetching: GitHub={github_username}, LC={leetcode_username}, GFG={gfg_username}")
+
+    print(f"Fetching: GitHub={github_username}, LC={leetcode_username}")
 
     github_data = await fetch_github_data(github_username) if github_username else {"available": False}
     leetcode_data = await fetch_leetcode_data(leetcode_username) if leetcode_username else {"available": False}
-    gfg_data = await fetch_gfg_data(gfg_username) if gfg_username else {"available": False}
 
     return {
-        "github": github_data,
-        "leetcode": leetcode_data,
-        "gfg": gfg_data,
-    }
+    "github": github_data,
+    "leetcode": leetcode_data,
+}
 
 @app.post("/smart-analyze", response_model=None)
 async def smart_analyze(data: SmartAnalysisRequest):
@@ -393,16 +362,16 @@ async def smart_analyze(data: SmartAnalysisRequest):
 
     github_username = extract_username(data.github or "")
     leetcode_username = extract_username(data.leetcode or "")
-    gfg_username = extract_username(data.gfg or "")
+
 
     # Fetch real platform data
     github = await fetch_github_data(github_username) if github_username else {"available": False}
     leetcode = await fetch_leetcode_data(leetcode_username) if leetcode_username else {"available": False}
-    gfg = await fetch_gfg_data(gfg_username) if gfg_username else {"available": False}
+
 
     print("GitHub fetched:", github)
     print("LeetCode fetched:", leetcode)
-    print("GFG fetched:", gfg)
+
 
     # ================= BUILD CONTEXT =================
     platform_context = ""
@@ -444,18 +413,6 @@ LEETCODE (Real Data):
 - Ranking: {leetcode.get('ranking', 'N/A')}
 """
 
-    if gfg.get("available"):
-        platform_context += f"""
-GFG (Real Data):
-- Total Problems Solved: {gfg.get('total_solved', 0)}
-- Coding Score: {gfg.get('coding_score', 0)}
-- Current Streak: {gfg.get('streak', 0)} days
-- Max Streak: {gfg.get('max_streak', 0)} days
-- Easy: {gfg.get('easy', 0)}
-- Medium: {gfg.get('medium', 0)}
-- Hard: {gfg.get('hard', 0)}
-- Institute Rank: {gfg.get('institute_rank', 'N/A')}
-"""
 
     # Missing platforms
     missing_platforms = []
@@ -463,8 +420,6 @@ GFG (Real Data):
         missing_platforms.append("GitHub")
     if not leetcode.get("available"):
         missing_platforms.append("LeetCode")
-    if not gfg.get("available"):
-        missing_platforms.append("GFG")
 
     if missing_platforms:
         platform_context += f"""
@@ -514,7 +469,7 @@ Provide:
             "platform_data": {
                 "github": github,
                 "leetcode": leetcode,
-                "gfg": gfg,
+
             }
         }
 
@@ -524,7 +479,7 @@ Provide:
             "platform_data": {
                 "github": github,
                 "leetcode": leetcode,
-                "gfg": gfg,
+
             }
         }
 
@@ -542,7 +497,6 @@ def analyze_profile(profile: Profile):
     Goal: {profile.goal}
     GitHub: {profile.github}
     LinkedIn: {profile.linkedin}
-    GFG: {profile.gfg}
     LeetCode: {profile.leetcode}
 
     Give response in this format:
